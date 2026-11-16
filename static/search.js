@@ -17,12 +17,24 @@ const terms = query => normalize(query).split(/\s+/).filter(Boolean);
 
 const haystack = post => normalize(`${post.title} ${post.tags.join(" ")} ${post.text}`);
 
+// Número total de apariciones de los términos buscados en el post
+const countHits = ts => post => {
+  const h = haystack(post);
+  return ts.reduce((total, t) => total + (h.split(t).length - 1), 0);
+};
+
 // Un post coincide si contiene TODOS los términos
 const matches = ts => post => ts.every(t => haystack(post).includes(t));
 
+// Filtra y ordena por número de coincidencias descendente (función pura: no muta `posts`)
 const search = (posts, query) => {
   const ts = terms(query);
-  return ts.length ? posts.filter(matches(ts)) : [];
+  if (!ts.length) return [];
+  const hitsOf = countHits(ts);
+  return posts
+    .filter(matches(ts))
+    .map(post => ({ ...post, hits: hitsOf(post) }))
+    .sort((a, b) => b.hits - a.hits);
 };
 
 // --- efectos (DOM) ----------------------------------------------------------
@@ -33,9 +45,10 @@ const toItem = base => post => {
   a.href = base.replace(/\/$/, "") + post.url;
   a.textContent = post.title;
 
+  const hitsLabel = post.hits ? ` (${post.hits} coincidencia${post.hits === 1 ? "" : "s"})` : "";
   const meta = document.createElement("span");
   meta.className = "meta";
-  meta.textContent = ` ${post.date.slice(0, 10)} — ${post.summary}`;
+  meta.textContent = ` ${post.date.slice(0, 10)}${hitsLabel} — ${post.summary}`;
 
   const li = document.createElement("li");
   li.append(a, meta);
