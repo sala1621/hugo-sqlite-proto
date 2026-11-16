@@ -17,11 +17,12 @@ Ese comando detecta cambios en `content/` y `layouts/` y reconstruye el sitio au
 ```
 content/*.md --> tools/index.py --> build/site.db --+--> static/search.json --> navegador (search.js)
  (Markdown)       (parsea + INSERT)   (SQLite, local) +--> data/tags.json -----> Hugo (layouts/index.html)
+                                                      +--> data/words.json ----> Hugo (footer.html, single.html)
 
                                      hugo --> public/   <- lo único que se despliega
 ```
 
-`build/`, `static/search.json` y `data/tags.json` están en `.gitignore`: se **regeneran** en cada build.
+`build/`, `static/search.json`, `data/tags.json` y `data/words.json` están en `.gitignore`: se **regeneran** en cada build.
 
 ## Requisitos
 
@@ -32,12 +33,13 @@ content/*.md --> tools/index.py --> build/site.db --+--> static/search.json --> 
 ## Uso
 
 ```bash
-make            # == make help
-make serve    # índice + servidor local en http://localhost:1313/
-make build    # índice + hugo --gc --minify  → public/
-make check    # valida que los JSON generados son JSON válido
+make                # == make help
+make serve          # índice + servidor local en http://localhost:1313/
+make serve-drafts   # índice (--drafts) + hugo server -D (incluye borradores)
+make build          # índice + hugo --gc --minify  → public/
+make check          # valida que los JSON generados son JSON válido
 make clean
-make check-invites   # [profesor] invitaciones de colaborador pendientes (gh CLI)
+make check-invites  # [profesor] invitaciones de colaborador pendientes (gh CLI)
 ```
 
 ## Estructura
@@ -69,6 +71,33 @@ Makefile            index · build · serve · check · clean
 3. Añade una tabla `words(url, n)` con el número de palabras de cada post y muestra el total en el pie.
 4. Cambia la búsqueda para ordenar los resultados por número de coincidencias (sigue siendo una función pura).
 5. Despliega `public/` con `rsync` a tu VPS o con GitHub Pages. ¿Qué proceso corre en el servidor? (Ninguno de tuyos.)
+
+## Resolución de los ejercicios y flujo de datos
+
+### 1. Nuevo post con `tags: [sql]` (`content/posts/consultas-sql-json.md`)
+Se ha añadido el artículo `content/posts/consultas-sql-json.md` con etiquetas `[sql, sqlite, build, kiss]`. Al ejecutar `make index` (o `make serve`), `tools/index.py` extrae el front matter, inserta las filas en la tabla `tags(url, tag)` de `build/site.db` y ejecuta `Q_TAGS` (`GROUP BY tag`), exportando `data/tags.json` para que Hugo actualice automáticamente los contadores en `layouts/index.html`.
+
+### 2. ¿Por qué `hugo server -D` no encontraba el borrador? Flag `--drafts`
+Aunque `hugo server -D` renderiza en HTML los ficheros con `draft: true` (como `content/posts/borrador.md`), el buscador del navegador lee únicamente `static/search.json`, que es generado por `tools/index.py`. Originalmente `read_all()` filtraba siempre `if not page["draft"]`, por lo que los borradores nunca entraban en `build/site.db` ni en `static/search.json`.
+- **Solución:** Se ha parametrizado `read_all(include_drafts=False)` en `tools/index.py` para aceptar `--drafts` (o `-D`) por línea de comandos y se ha añadido la regla `make serve-drafts` en el `Makefile`.
+
+### 3. Tabla `words(url, n)` en SQLite y total en el pie de página
+Siguiendo la filosofía Unix del proyecto (`Markdown → SQLite → JSON → Hugo`):
+1. **Parseo puro (`tools/index.py`):** La función pura `count_words(text)` calcula el número de palabras del texto limpio de cada página.
+2. **Almacenamiento relacional (`build/site.db`):** Se ha añadido la tabla `words(url TEXT PRIMARY KEY REFERENCES posts(url), n INTEGER NOT NULL DEFAULT 0)` al esquema SQLite.
+3. **Agregación SQL a JSON (`Q_WORDS` → `data/words.json`):** Mediante `SUM(n)`, `COUNT(*)` y `json_group_object(url, n)` de la extensión JSON1 de SQLite, se exporta `data/words.json` con el total global y el desglose por URL. Además, `Q_SEARCH` hace `JOIN words` para incluir el conteo en `static/search.json`.
+4. **Plantillas Hugo (`layouts/partials/footer.html`):** El pie consume `hugo.Data.words.total` y `hugo.Data.words.pages` en tiempo de build para mostrar el total de palabras del sitio sin necesidad de base de datos en producción.
+
+### 4. Ordenación de resultados por número de coincidencias (`static/search.js`)
+Se ha añadido la función pura `countHits(ts)(post)` que cuenta cuántas veces aparecen los términos buscados en el texto normalizado (`title + tags + text`). La función `search(posts, query)` filtra los posts que contienen todos los términos, proyecta copias inmutables (`{ ...post, hits }`) sin mutar el array original `posts` y las ordena de mayor a menor número de coincidencias (`(a, b) => b.hits - a.hits`).
+
+### 5. Despliegue estático y procesos en servidor
+Al desplegar `public/` mediante `rsync` o GitHub Pages, en el servidor **no corre ningún proceso nuestro** (ni Python, ni SQLite, ni Hugo): únicamente el servidor web estático (Nginx, Apache o el CDN de GitHub Pages) sirviendo ficheros `.html`, `.css`, `.js` y `.json` precalculados en tiempo de build.
+
+### Aportación propia
+- **Conteo de palabras por artículo en plantillas y buscador:** Aprovechando el mapa `by_url` generado por SQLite en `data/words.json` y el campo `words` en `static/search.json`, se muestra el número de palabras de cada post tanto en la portada (`layouts/index.html`), como en la cabecera de cada artículo (`layouts/_default/single.html`) y en cada resultado de búsqueda (`static/search.js`) junto con el número de coincidencias.
+- **Mejoras de UX en el buscador (`static/search.js`):** Soporte para inicializar búsquedas desde la URL mediante el parámetro `?q=termino` y limpieza rápida con la tecla `Escape`.
+- **Mantenimiento del proyecto (`TASKS.org`, `BUGS.org`, `Makefile`):** Documentación de la causa y solución del error de Pandoc (`lmodern.sty`) en `BUGS.org`, actualización de `TASKS.org` y validación de `data/words.json` en `make check`.
 
 ## Límites a propósito (KISS)
 
