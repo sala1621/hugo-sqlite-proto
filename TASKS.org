@@ -6,12 +6,18 @@
 #+STARTUP: overview
 #+STARTUP: inline-images
 
-* TODO [Another task]
-:PROPERTIES:
-:CREATED: [2026-03-19]
-:END:
-
 * Completed
+
+** DONE Resolver ejercicios propuestos (Ej. 1 a 4) y aportación propia
+CLOSED: [2026-11-16]
+:PROPERTIES:
+:CREATED: [2026-11-16]
+:END:
+- Ejercicio 1: nuevo post `content/posts/consultas-sql-json.md` con etiqueta `sql`.
+- Ejercicio 2: flag `--drafts` (`-D`) en `tools/index.py` y objetivo `make serve-drafts`.
+- Ejercicio 3: tabla `words(url, n)` en SQLite, exportación a `data/words.json` y total en `footer.html`.
+- Ejercicio 4: ordenación pura por número de coincidencias en `static/search.js`.
+- Aportación propia: conteo de palabras por post en plantillas (`single.html`, `index.html`) y en buscador, soporte de `?q=` en URL y tecla `Escape`.
 
 ** DONE add the 'Fork me on Github' ribbon
 CLOSED: [2026-11-05]

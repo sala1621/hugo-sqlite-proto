@@ -65,8 +65,11 @@ fenix@anka4 ~/hugo-sqlite-proto (main)
 $ 
 
 *** Investigation Notes
-- [Notes from debugging]
+- Pandoc usa `pdflatex` por defecto para generar PDF y requiere la fuente Latin Modern (`lmodern.sty`).
+- En sistemas Debian/Ubuntu con instalación mínima de TeX Live no viene instalado el paquete `lmodern`.
 
 *** Potential Fix
-- [Ideas for resolution]
+- Instalar el paquete de fuentes LaTeX: `sudo apt install lmodern texlive-fonts-recommended`
+- O bien indicar a Pandoc un motor PDF alternativo HTML/CSS como `wkhtmltopdf` o `weasyprint`:
+  `pandoc README.md --pdf-engine=wkhtmltopdf -o hugo-sqlite-proto_README.pdf`
  

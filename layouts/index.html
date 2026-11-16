@@ -23,7 +23,9 @@
 <h2>Últimos posts</h2>
 <ul class="posts">
   {{ range first 5 (where site.RegularPages "Section" "posts").ByDate.Reverse }}
-  <li><a href="{{ .RelPermalink }}">{{ .Title }}</a> <span class="meta">{{ .Date.Format "2006-01-02" }}</span></li>
+  {{ $url := replaceRE "^/[^/]+/" "/" .RelPermalink }}
+  {{ $words := or (index hugo.Data.words.by_url .RelPermalink) (index hugo.Data.words.by_url $url) }}
+  <li><a href="{{ .RelPermalink }}">{{ .Title }}</a> <span class="meta">{{ .Date.Format "2006-01-02" }}{{ with $words }} · {{ . }} palabras{{ end }}</span></li>
   {{ end }}
 </ul>
 

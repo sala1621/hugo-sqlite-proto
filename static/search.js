@@ -45,10 +45,13 @@ const toItem = base => post => {
   a.href = base.replace(/\/$/, "") + post.url;
   a.textContent = post.title;
 
-  const hitsLabel = post.hits ? ` (${post.hits} coincidencia${post.hits === 1 ? "" : "s"})` : "";
+  const details = [
+    post.hits ? `${post.hits} coincidencia${post.hits === 1 ? "" : "s"}` : "",
+    post.words ? `${post.words} palabras` : "",
+  ].filter(Boolean).join(" · ");
   const meta = document.createElement("span");
   meta.className = "meta";
-  meta.textContent = ` ${post.date.slice(0, 10)}${hitsLabel} — ${post.summary}`;
+  meta.textContent = ` ${post.date.slice(0, 10)}${details ? ` (${details})` : ""} — ${post.summary}`;
 
   const li = document.createElement("li");
   li.append(a, meta);
@@ -70,11 +73,19 @@ const main = async () => {
   const { index, base } = list.dataset;
   const posts = await fetch(index).then(r => r.json());
 
-  input.addEventListener("input", () => {
+  const render = () => {
     const found = search(posts, input.value);
     const items = found.map(toItem(base));
     list.replaceChildren(...(items.length || !input.value.trim() ? items : [emptyItem()]));
+  };
+
+  input.addEventListener("input", render);
+  input.addEventListener("keydown", e => {
+    if (e.key === "Escape") { input.value = ""; render(); }
   });
+
+  const initialQuery = new URLSearchParams(window.location.search).get("q");
+  if (initialQuery) { input.value = initialQuery; render(); }
 };
 
 main().catch(err => console.error("search.js:", err));
