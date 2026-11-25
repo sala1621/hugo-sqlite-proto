@@ -119,10 +119,34 @@ def transformar(entrada, user_id, ahora):
         },
     }
 
+
+def transformar_pagina(entrada, user_id, ahora):
+    """Página del prototipo (ej. content/about.md) → fila para tabla `pages` de Chyrp Lite."""
+    slug = slugify(entrada["slug"])
+    es_borrador = entrada.get("draft", False)
+    return {
+        "title": entrada["titulo"],
+        "body": entrada["cuerpo"],
+        "public": 0 if es_borrador else 1,
+        "show_in_list": 0 if es_borrador else 1,
+        "list_order": 0,
+        "clean": slug,
+        "url": slug,
+        "user_id": user_id,
+        "parent_id": 0,
+        "created_at": fecha_chyrp(entrada["fecha"], ahora),
+        "updated_at": SQL_DATETIME_ZERO,
+    }
+
 # --- efectos: disco y SQL ----------------------------------------------------
 
 def extraer(origen):
     ficheros = (p for p in sorted(Path(origen).rglob("*.md")) if p.name != "_index.md")
+    return [leer_entrada(p) for p in ficheros]
+
+
+def extraer_paginas(origen="content"):
+    ficheros = (p for p in sorted(Path(origen).glob("*.md")) if p.name != "_index.md")
     return [leer_entrada(p) for p in ficheros]
 
 
@@ -150,6 +174,10 @@ def existe(con, url):
     return con.execute("SELECT 1 FROM posts WHERE url = ?", (url,)).fetchone() is not None
 
 
+def existe_pagina(con, url):
+    return con.execute("SELECT 1 FROM pages WHERE url = ?", (url,)).fetchone() is not None
+
+
 def insertar(con, fila):
     columnas = list(fila["post"])
     cur = con.execute(
@@ -158,6 +186,14 @@ def insertar(con, fila):
     con.executemany(
         "INSERT INTO post_attributes(post_id, name, value) VALUES (?, ?, ?)",
         [(cur.lastrowid, nombre, valor) for nombre, valor in fila["attrs"].items()])
+    return cur.lastrowid
+
+
+def insertar_pagina(con, fila_pagina):
+    columnas = list(fila_pagina)
+    cur = con.execute(
+        f"INSERT INTO pages({", ".join(columnas)}) VALUES ({", ".join("?" * len(columnas))})",
+        [fila_pagina[c] for c in columnas])
     return cur.lastrowid
 
 
@@ -180,12 +216,32 @@ def cargar(destino, filas, simulacro=False):
         con.close()
 
 
+def cargar_paginas(destino, filas_paginas, simulacro=False):
+    """Inserta páginas en la tabla `pages` de Chyrp Lite en una sola transacción."""
+    con = sqlite3.connect(destino)
+    try:
+        with con:
+            resultado = []
+            for fila in filas_paginas:
+                url = fila["url"]
+                if existe_pagina(con, url):
+                    resultado.append(("omitida", url))
+                    continue
+                if not simulacro:
+                    insertar_pagina(con, fila)
+                resultado.append(("simulada" if simulacro else "creada", url))
+            return resultado
+    finally:
+        con.close()
+
+
 def main():
     ap = argparse.ArgumentParser(description="Markdown (P1.1) → SQLite de Chyrp Lite")
     ap.add_argument("--origen", default="content/posts", help="carpeta con los .md")
     ap.add_argument("--destino", required=True, help="fichero .sqlite de Chyrp Lite (¡una COPIA!)")
     ap.add_argument("--autor", help="login del autor en Chyrp Lite (por defecto, el primer usuario)")
     ap.add_argument("--simulacro", action="store_true", help="muestra qué haría, sin escribir")
+    ap.add_argument("--paginas", action="store_true", help="migra también las páginas de content/*.md a la tabla pages")
     args = ap.parse_args()
 
     comprobar_destino(args.destino)
@@ -204,6 +260,17 @@ def main():
     nuevas = sum(1 for estado, _ in resultado if estado != "omitida")
     print(f"migrar: {len(entradas)} entradas leídas, {nuevas} nuevas, "
           f"{len(entradas) - nuevas} ya estaban")
+
+    if args.paginas:
+        raiz = Path(args.origen).parent if Path(args.origen).name == "posts" else Path("content")
+        paginas = extraer_paginas(raiz)
+        filas_pag = [transformar_pagina(p, user_id, ahora) for p in paginas]
+        res_pag = cargar_paginas(args.destino, filas_pag, args.simulacro)
+        for estado, url in res_pag:
+            print(f"{estado:9} [page] {url}")
+        nuevas_p = sum(1 for estado, _ in res_pag if estado != "omitida")
+        print(f"migrar (páginas): {len(paginas)} páginas leídas, {nuevas_p} nuevas, "
+              f"{len(paginas) - nuevas_p} ya estaban")
 
 
 if __name__ == "__main__":
