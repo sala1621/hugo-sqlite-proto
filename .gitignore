@@ -8,3 +8,4 @@ build/
 static/search.json
 data/tags.json
 data/words.json
+__pycache__/

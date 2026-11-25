@@ -198,4 +198,4 @@ make migrar DESTINO=$HOME/chyrp-datos/copia.sqlite                 # Migración 
 5. **Ejercicio 5 (Etiquetas numéricas como `2026`):** Corregida `etiquetas_json` para emular el comportamiento exacto del módulo Tags de Chyrp Lite (`prepare_tags` en `modules/tags/tags.php`): prefijar etiquetas numéricas con `\ufe0e` (U+FE0E) para evitar que PHP convierta la clave del array asociativo a entero, y calcular el hash MD5 como slug `clean` cuando el slug solo contiene dígitos o guiones.
 6. **Ejercicio 6 (Informe SQL de etiquetas):** Comparada la consulta `GROUP BY tag` en el esquema normalizado del prototipo (`tags(url, tag)`) con la consulta equivalente en Chyrp Lite sobre el atributo EAV serializado en JSON usando `json_each(post_attributes.value)`.
 
-El informe completo con todas las tablas, respuestas, verificaciones SQL, capturas y reflexiones se encuentra en [`P1.2-salazar.md`](P1.2-salazar.md).
+El informe completo con todas las tablas, respuestas, verificaciones SQL, capturas y reflexiones se encuentra en [`P1.2-salazar.pdf`](P1.2-salazar.pdf).
