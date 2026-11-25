@@ -88,7 +88,7 @@ def leer_entrada(path):
     front, cuerpo = split_front_matter(path.read_text(encoding="utf-8"))
     meta = parse_meta(front)
     tags = meta.get("tags", [])
-    return {
+    entrada = {
         "slug": path.stem,
         "titulo": meta.get("title", path.stem),
         "fecha": str(meta.get("date", "")),
@@ -96,11 +96,23 @@ def leer_entrada(path):
         "tags": tags if isinstance(tags, list) else [tags],
         "draft": meta.get("draft", False) is True,
     }
+    if "author" in meta and str(meta["author"]).strip():
+        entrada["author"] = str(meta["author"]).strip()
+    return entrada
 
 
-def transformar(entrada, user_id, ahora):
+def resolver_user_id(entrada, user_id, autores=None):
+    """Devuelve el user_id del campo `author` del front matter si existe en `autores`."""
+    autor_fm = entrada.get("author")
+    if autor_fm and isinstance(autores, dict) and autor_fm in autores:
+        return autores[autor_fm]
+    return user_id
+
+
+def transformar(entrada, user_id, ahora, autores=None):
     """Entrada del prototipo → filas para Chyrp Lite. Sin disco ni SQL."""
     slug = slugify(entrada["slug"])
+    uid = resolver_user_id(entrada, user_id, autores)
     return {
         "post": {
             "feather": "text",
@@ -108,7 +120,7 @@ def transformar(entrada, user_id, ahora):
             "url": slug,
             "pinned": 0,
             "status": "draft" if entrada["draft"] else "public",
-            "user_id": user_id,
+            "user_id": uid,
             "created_at": fecha_chyrp(entrada["fecha"], ahora),
             "updated_at": SQL_DATETIME_ZERO,
         },
@@ -168,6 +180,11 @@ def buscar_autor(con, login):
     if fila is None or fila[0] is None:
         sys.exit("migrar.py: no encuentro ese autor en la tabla users")
     return fila[0]
+
+
+def mapa_autores(con):
+    """Devuelve un dict {login: id} con todos los usuarios de Chyrp Lite."""
+    return {login: uid for uid, login in con.execute("SELECT id, login FROM users")}
 
 
 def existe(con, url):
@@ -250,9 +267,10 @@ def main():
 
     con = sqlite3.connect(args.destino)
     user_id = buscar_autor(con, args.autor)
+    autores = mapa_autores(con)
     con.close()
 
-    filas = [transformar(e, user_id, ahora) for e in entradas]
+    filas = [transformar(e, user_id, ahora, autores) for e in entradas]
     resultado = cargar(args.destino, filas, args.simulacro)
 
     for estado, url in resultado:
