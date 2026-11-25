@@ -174,3 +174,28 @@ git log --format='%h %ad %s' --date=iso | head -20
 ```
 
 "Recuerda ... KISS!" :-)
+
+---
+
+# SGBD P1.2 — Migración de Hugo + SQLite a Chyrp Lite + SQLite
+
+En la rama `chyrp-lite` se incluye el flujo ETL (`tools/migrar.py`) y su batería de pruebas unitarias (`tools/test_migrar.py`) para migrar las entradas y páginas del prototipo estático (P1.1) a la base de datos SQLite de **Chyrp Lite**.
+
+## Nuevos objetivos en el `Makefile`
+
+```bash
+make test                                                          # Ejecuta las 15 pruebas unitarias puras
+make migrar DESTINO=$HOME/chyrp-datos/copia.sqlite SIMULACRO=1     # Simulacro sin escribir en la BD
+make migrar DESTINO=$HOME/chyrp-datos/copia.sqlite                 # Migración transaccional e idempotente
+```
+
+## Cambios y ejercicios implementados en `tools/migrar.py` y `tools/test_migrar.py`
+
+1. **Ejercicio 1 (Transaccionalidad con `with con:`):** Comprobado el rollback automático cuando falla la inserción en la 3.ª entrada frente a la ejecución sin transacción (que deja la base de datos a medias).
+2. **Ejercicio 2 (Migración de páginas a `pages`):** Añadidas `transformar_pagina` (función pura), `extraer_paginas`, `existe_pagina`, `insertar_pagina`, `cargar_paginas` y el flag `--paginas` para migrar `content/about.md` a la tabla `pages` de Chyrp Lite, junto con sus pruebas en `TestTransformarPagina`.
+3. **Ejercicio 3 (Variante desde `build/site.db`):** Añadida `extraer_desde_db` (`--desde-db build/site.db`) para comparar la migración leyendo desde la base de datos de build (donde `posts.body` es texto plano tras `plain()` y no están los borradores) frente a leer los `.md` originales.
+4. **Ejercicio 4 (Soporte de autor por CLI y front matter):** Probado `--autor editor` y ampliado `leer_entrada` + `transformar` (`resolver_user_id`) para respetar un campo `author` en el front matter si coincide con un usuario de `users` en Chyrp Lite.
+5. **Ejercicio 5 (Etiquetas numéricas como `2026`):** Corregida `etiquetas_json` para emular el comportamiento exacto del módulo Tags de Chyrp Lite (`prepare_tags` en `modules/tags/tags.php`): prefijar etiquetas numéricas con `\ufe0e` (U+FE0E) para evitar que PHP convierta la clave del array asociativo a entero, y calcular el hash MD5 como slug `clean` cuando el slug solo contiene dígitos o guiones.
+6. **Ejercicio 6 (Informe SQL de etiquetas):** Comparada la consulta `GROUP BY tag` en el esquema normalizado del prototipo (`tags(url, tag)`) con la consulta equivalente en Chyrp Lite sobre el atributo EAV serializado en JSON usando `json_each(post_attributes.value)`.
+
+El informe completo con todas las tablas, respuestas, verificaciones SQL, capturas y reflexiones se encuentra en [`P1.2-salazar.md`](P1.2-salazar.md).
